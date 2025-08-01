@@ -12,9 +12,13 @@ nest_asyncio.apply()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 🔐 Replace with your Telegram Bot Token
-TOKEN = "8282771504:AAFlaocA6zBCd369Kkz_H60Hp97j9G7LOZU"
-CHAT_ID = "967988398"  # Replace this with your Telegram user ID or group ID
+import os
+TOKEN = os.getenv("8282771504:AAFlaocA6zBCd369Kkz_H60Hp97j9G7LOZU")
+CHAT_ID = os.getenv("967988398")
+
+# rest of your code...
+app = Application.builder().token(TOKEN).build()
+
 
 # 🌐 Cybersecurity news feeds
 FEEDS = {
@@ -57,3 +61,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
