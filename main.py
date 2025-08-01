@@ -1,3 +1,4 @@
+import os
 import logging
 import feedparser
 import requests
@@ -8,14 +9,14 @@ from telegram.ext import JobQueue
 
 nest_asyncio.apply()
 
-# Enable logging
+# Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import os
-
+# ✅ Load from environment variables
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+
 
 
 # rest of your code...
@@ -63,5 +64,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
