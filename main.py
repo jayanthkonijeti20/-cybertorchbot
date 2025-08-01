@@ -13,8 +13,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import os
-TOKEN = os.getenv("8282771504:AAFlaocA6zBCd369Kkz_H60Hp97j9G7LOZU")
-CHAT_ID = os.getenv("967988398")
+
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+
 
 # rest of your code...
 app = Application.builder().token(TOKEN).build()
@@ -61,4 +63,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
