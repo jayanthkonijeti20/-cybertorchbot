@@ -1,4 +1,4 @@
+python-telegram-bot==20.7
 feedparser
 requests
 nest_asyncio
-python-telegram-bot[job-queue]==20.3
