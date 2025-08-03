@@ -1,72 +1,105 @@
 import os
 import logging
 import feedparser
-from telegram import Bot
-from telegram.constants import ParseMode
-from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
+import nest_asyncio
+from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue
 
-# Enable logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
+# Apply nest_asyncio for async event loop support on Render
+nest_asyncio.apply()
+
+# Setup Logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+# Environment Variables (from Render settings)
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# Initialize the bot
-bot = Bot(token=TOKEN)
+if not TOKEN or not CHAT_ID:
+    raise Exception("❌ TOKEN or CHAT_ID not set in environment variables.")
 
-# Define RSS feed URLs
-RSS_FEEDS = [
-    "https://feeds.feedburner.com/TheHackersNews",
-    "https://krebsonsecurity.com/feed/",
-    "https://www.bleepingcomputer.com/feed/",
-    "https://www.darkreading.com/rss.xml",
-    "https://www.cyberscoop.com/feed/",
-    "https://threatpost.com/feed/",
-    "https://feeds.feedburner.com/securityweek",
-    "https://www.infosecurity-magazine.com/rss/news/",
-    "https://medium.com/feed/mitre-attack",
-    "https://nakedsecurity.sophos.com/feed/"
-]
+# Cybersecurity RSS Feeds (15 top sources)
+FEEDS = {
+    "The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
+    "Krebs on Security": "https://krebsonsecurity.com/feed/",
+    "Bleeping Computer": "https://www.bleepingcomputer.com/feed/",
+    "Security Week": "https://feeds.feedburner.com/securityweek",
+    "Dark Reading": "https://www.darkreading.com/rss.xml",
+    "Threatpost": "https://threatpost.com/feed/",
+    "CyberScoop": "https://www.cyberscoop.com/feed/",
+    "SC Media": "https://www.scmagazine.com/home/feed/",
+    "HackRead": "https://www.hackread.com/feed/",
+    "GovInfoSecurity": "https://www.govinfosecurity.com/rss",
+    "Infosecurity Magazine": "https://www.infosecurity-magazine.com/rss/news/",
+    "The Daily Swig (PortSwigger)": "https://portswigger.net/daily-swig/rss",
+    "Naked Security by Sophos": "https://nakedsecurity.sophos.com/feed/",
+    "Security Affairs": "https://securityaffairs.com/feed",
+    "Help Net Security": "https://www.helpnetsecurity.com/feed/",
+}
 
-# Function to fetch and send news
-def send_news():
-    all_entries = []
+# Track sent articles to avoid duplicates
+sent_articles = set()
 
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-        all_entries.extend(feed.entries)
 
-    # Sort by published date if available
-    all_entries = sorted(
-        all_entries, key=lambda x: x.get("published_parsed", datetime.utcnow()), reverse=True
+async def send_news(context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.utcnow()
+    yesterday = now - timedelta(days=1)
+
+    for name, url in FEEDS.items():
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries[:5]:  # Limit to latest 5 per feed
+                link = entry.link
+                title = entry.title
+
+                # Parse date
+                published = entry.get("published_parsed") or entry.get("updated_parsed")
+                if published:
+                    published_dt = datetime(*published[:6])
+                    if published_dt < yesterday:
+                        continue
+                else:
+                    continue  # Skip if no timestamp
+
+                if link in sent_articles:
+                    continue
+
+                sent_articles.add(link)
+
+                message = (
+                    f"📰 <b>{title}</b>\n"
+                    f"Source: {name}\n\n"
+                    f"<a href='{link}'>Read More</a>"
+                )
+                await context.bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=message,
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
+        except Exception as e:
+            logger.error(f"❌ Error fetching from {name}: {e}")
+
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 CyberTorch Activated!\nYou'll receive cybersecurity news every 5 minutes from top sources."
     )
 
-    # Get top 5 recent news
-    top_news = all_entries[:5]
 
-    for entry in top_news:
-        title = entry.title
-        link = entry.link
-        message = f"🛡️ <b>{title}</b>\n<a href='{link}'>Read more</a>"
-        try:
-            bot.send_message(chat_id=CHAT_ID, text=message, parse_mode=ParseMode.HTML)
-        except Exception as e:
-            logger.error(f"Failed to send message: {e}")
+def main():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start_command))
 
-# Scheduler to send news every 5 hours
-scheduler = BackgroundScheduler()
-scheduler.add_job(send_news, 'interval', hours=5)
-scheduler.start()
+    # Schedule job every 5 minutes
+    job_queue: JobQueue = app.job_queue
+    job_queue.run_repeating(send_news, interval=300, first=5)
 
-# Run once at startup
-send_news()
+    logger.info("🚀 CyberTorch is now running...")
+    app.run_polling()
 
-# Keep the app running
-import time
-while True:
-    time.sleep(60)
+
+if __name__ == "__main__":
+    main()
