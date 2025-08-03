@@ -1,46 +1,72 @@
 import os
 import logging
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    ContextTypes,
-    CommandHandler,
-)
+import feedparser
+from telegram import Bot
+from telegram.constants import ParseMode
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
 
+# Enable logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+# Initialize the bot
+bot = Bot(token=TOKEN)
 
-app = ApplicationBuilder().token(TOKEN).build()
+# Define RSS feed URLs
+RSS_FEEDS = [
+    "https://feeds.feedburner.com/TheHackersNews",
+    "https://krebsonsecurity.com/feed/",
+    "https://www.bleepingcomputer.com/feed/",
+    "https://www.darkreading.com/rss.xml",
+    "https://www.cyberscoop.com/feed/",
+    "https://threatpost.com/feed/",
+    "https://feeds.feedburner.com/securityweek",
+    "https://www.infosecurity-magazine.com/rss/news/",
+    "https://medium.com/feed/mitre-attack",
+    "https://nakedsecurity.sophos.com/feed/"
+]
 
+# Function to fetch and send news
+def send_news():
+    all_entries = []
 
-# Sample /start command handler
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="👋 Hello, I'm CyberTorch!")
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+        all_entries.extend(feed.entries)
 
-
-app.add_handler(CommandHandler("start", start))
-
-
-# Webhook Setup (Render will expose this port via PORT env var)
-async def main():
-    # Get your external URL (from Render)
-    WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook"
-
-    await app.bot.set_webhook(WEBHOOK_URL)
-    await app.start()
-    await app.updater.start_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        webhook_url=WEBHOOK_URL,
+    # Sort by published date if available
+    all_entries = sorted(
+        all_entries, key=lambda x: x.get("published_parsed", datetime.utcnow()), reverse=True
     )
-    await app.updater.idle()
 
+    # Get top 5 recent news
+    top_news = all_entries[:5]
 
-if __name__ == "__main__":
-    import asyncio
+    for entry in top_news:
+        title = entry.title
+        link = entry.link
+        message = f"🛡️ <b>{title}</b>\n<a href='{link}'>Read more</a>"
+        try:
+            bot.send_message(chat_id=CHAT_ID, text=message, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"Failed to send message: {e}")
 
-    asyncio.run(main())
+# Scheduler to send news every 5 hours
+scheduler = BackgroundScheduler()
+scheduler.add_job(send_news, 'interval', hours=5)
+scheduler.start()
+
+# Run once at startup
+send_news()
+
+# Keep the app running
+import time
+while True:
+    time.sleep(60)
