@@ -6,21 +6,22 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue
 
-# Apply nest_asyncio for async event loop support on Render
 nest_asyncio.apply()
 
 # Setup Logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# Environment Variables (from Render settings)
+# Load Environment Variables
 TOKEN = os.getenv("TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 if not TOKEN or not CHAT_ID:
     raise Exception("❌ TOKEN or CHAT_ID not set in environment variables.")
 
-# Cybersecurity RSS Feeds (15 top sources)
+# Cybersecurity RSS Feeds
 FEEDS = {
     "The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
     "Krebs on Security": "https://krebsonsecurity.com/feed/",
@@ -33,10 +34,14 @@ FEEDS = {
     "HackRead": "https://www.hackread.com/feed/",
     "GovInfoSecurity": "https://www.govinfosecurity.com/rss",
     "Infosecurity Magazine": "https://www.infosecurity-magazine.com/rss/news/",
-    "The Daily Swig (PortSwigger)": "https://portswigger.net/daily-swig/rss",
-    "Naked Security by Sophos": "https://nakedsecurity.sophos.com/feed/",
+    "The Daily Swig": "https://portswigger.net/daily-swig/rss",
+    "Naked Security": "https://nakedsecurity.sophos.com/feed/",
     "Security Affairs": "https://securityaffairs.com/feed",
+    "Zero Day": "https://www.zdnet.com/topic/security/rss.xml",
+    "CSO Online": "https://www.csoonline.com/index.rss",
     "Help Net Security": "https://www.helpnetsecurity.com/feed/",
+    "Malwarebytes Blog": "https://blog.malwarebytes.com/feed/",
+    "Cisco Blogs Security": "https://blogs.cisco.com/security/feed"
 }
 
 # Track sent articles to avoid duplicates
@@ -50,54 +55,59 @@ async def send_news(context: ContextTypes.DEFAULT_TYPE):
     for name, url in FEEDS.items():
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:5]:  # Limit to latest 5 per feed
+            for entry in feed.entries[:5]:
                 link = entry.link
                 title = entry.title
 
-                # Parse date
                 published = entry.get("published_parsed") or entry.get("updated_parsed")
                 if published:
                     published_dt = datetime(*published[:6])
                     if published_dt < yesterday:
                         continue
                 else:
-                    continue  # Skip if no timestamp
+                    continue
 
                 if link in sent_articles:
                     continue
 
                 sent_articles.add(link)
-
                 message = (
-                    f"📰 <b>{title}</b>\n"
-                    f"Source: {name}\n\n"
-                    f"<a href='{link}'>Read More</a>"
+                    f"🛡️ <b>{title}</b>\n"
+                    f"<a href='{link}'>Read More</a>\n"
+                    f"Source: {name}"
                 )
+
                 await context.bot.send_message(
                     chat_id=CHAT_ID,
                     text=message,
                     parse_mode='HTML',
                     disable_web_page_preview=True
                 )
+                logger.info(f"✅ Sent: {title} | Source: {name}")
+
         except Exception as e:
             logger.error(f"❌ Error fetching from {name}: {e}")
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 CyberTorch Activated!\nYou'll receive cybersecurity news every 5 minutes from top sources."
+        "👋 CyberTorch Activated!\nYou'll receive the latest cybersecurity news every 5 minutes."
     )
+
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ CyberTorch bot is up and running!")
 
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("status", status_command))
 
-    # Schedule job every 5 minutes
     job_queue: JobQueue = app.job_queue
     job_queue.run_repeating(send_news, interval=300, first=5)
 
-    logger.info("🚀 CyberTorch is now running...")
+    logger.info("🚀 CyberTorch is running...")
     app.run_polling()
 
 
