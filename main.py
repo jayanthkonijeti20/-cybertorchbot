@@ -1,65 +1,90 @@
 import os
 import logging
 import feedparser
-import requests
 import nest_asyncio
-from telegram import Bot, Update
+from datetime import datetime, timedelta
+from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, JobQueue
 
-# Apply patch for async environments (like Railway)
 nest_asyncio.apply()
 
-# Enable logging
+# Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ✅ Get secrets from environment variables
-TOKEN = os.getenv("TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+# Load Environment Variables
+TOKEN = os.environ.get("TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
-# Build bot application
-app = Application.builder().token(TOKEN).build()
+if not TOKEN or not CHAT_ID:
+    raise Exception("❌ TOKEN or CHAT_ID not set in environment variables.")
 
-# 🌐 Cybersecurity news RSS feeds
+# RSS Feeds
 FEEDS = {
     "The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
     "Krebs on Security": "https://krebsonsecurity.com/feed/",
     "Bleeping Computer": "https://www.bleepingcomputer.com/feed/",
     "Security Week": "https://feeds.feedburner.com/securityweek",
+    "Dark Reading": "https://www.darkreading.com/rss.xml",
+    "Threatpost": "https://threatpost.com/feed/",
+    "CyberScoop": "https://www.cyberscoop.com/feed/",
+    "SC Media": "https://www.scmagazine.com/home/feed/",
+    "HackRead": "https://www.hackread.com/feed/",
+    "GovInfoSecurity": "https://www.govinfosecurity.com/rss",
+    "Infosecurity Magazine": "https://www.infosecurity-magazine.com/rss/news/",
+    "The Daily Swig (PortSwigger)": "https://portswigger.net/daily-swig/rss",
+    "Naked Security by Sophos": "https://nakedsecurity.sophos.com/feed/",
+    "Security Affairs": "https://securityaffairs.com/feed",
 }
 
-# Track sent articles to prevent duplicates
 sent_articles = set()
 
-# 📢 Function to fetch and send latest news
 async def send_news(context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.utcnow()
+    yesterday = now - timedelta(days=1)
+
     for name, url in FEEDS.items():
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:3]:  # Top 3 from each source
-                if entry.link not in sent_articles:
-                    sent_articles.add(entry.link)
-                    message = f"📰 <b>{entry.title}</b>\nSource: {name}\n\n<a href='{entry.link}'>Read More</a>"
-                    await context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode='HTML')
+            for entry in feed.entries[:5]:
+                link = entry.link
+                title = entry.title
+                published = entry.get("published_parsed") or entry.get("updated_parsed")
+                if published:
+                    published_dt = datetime(*published[:6])
+                    if published_dt < yesterday:
+                        continue
+                else:
+                    continue
+                if link in sent_articles:
+                    continue
+                sent_articles.add(link)
+                message = (
+                    f"📰 <b>{title}</b>\n"
+                    f"Source: {name}\n\n"
+                    f"<a href='{link}'>Read More</a>"
+                )
+                await context.bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=message,
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
         except Exception as e:
-            logger.error(f"[{name}] Error fetching feed: {e}")
+            logger.error(f"❌ Error fetching from {name}: {e}")
 
-# 👋 Respond to /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Cyber Bot Activated! You'll get fresh news every 10 minutes.")
+    await update.message.reply_text(
+        "👋 CyberTorch Activated!\n\nYou'll receive cybersecurity news every 5 minutes."
+    )
 
-# 🚀 Bot entry point
 def main():
-    logger.info("🚀 Starting Cyber News Bot on Railway...")
-
+    app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
-
-    # Run news job every 10 minutes
     job_queue: JobQueue = app.job_queue
-    job_queue.run_repeating(send_news, interval=600, first=5)
-
-    logger.info("🤖 Bot polling started.")
+    job_queue.run_repeating(send_news, interval=300, first=5)
+    logger.info("🚀 CyberTorch is now running...")
     app.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
