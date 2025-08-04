@@ -1,22 +1,28 @@
 import logging
 import feedparser
 import nest_asyncio
-import os
-
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
-from apscheduler.schedulers.background import BackgroundScheduler
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+)
+import os
+import asyncio
 
 nest_asyncio.apply()
 
 # Logging setup
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-# Get tokens from environment
+# Load secrets from environment variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")  # Channel username or numeric chat ID
+CHAT_ID = os.getenv("CHAT_ID")  # Chat ID or Channel username
 
-# RSS feeds
+# RSS Feed URLs
 FEEDS = [
     "https://www.darkreading.com/rss.xml",
     "https://feeds.feedburner.com/TheHackersNews",
@@ -30,8 +36,8 @@ FEEDS = [
     "https://www.schneier.com/blog/atom.xml"
 ]
 
-# Sends latest news
-async def send_news(context: CallbackContext):
+# News sending function
+async def send_news(context: ContextTypes.DEFAULT_TYPE):
     for url in FEEDS:
         feed = feedparser.parse(url)
         if feed.entries:
@@ -39,22 +45,21 @@ async def send_news(context: CallbackContext):
             message = f"🛡️ *{entry.title}*\n{entry.link}"
             await context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
 
-# /start command
+# /start handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Hello! I will keep you updated with the latest cybersecurity news!")
 
-def main():
+# Main entry
+async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Add command handler
     app.add_handler(CommandHandler("start", start))
 
-    # Setup scheduler with context
+    # Schedule job every 10 minutes
     job_queue = app.job_queue
-    job_queue.run_repeating(send_news, interval=600, first=5)
+    job_queue.run_repeating(send_news, interval=600, first=10)
 
-    # Start bot
-    app.run_polling()
+    await app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
