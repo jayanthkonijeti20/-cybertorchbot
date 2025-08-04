@@ -2,20 +2,23 @@ import logging
 import feedparser
 import nest_asyncio
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 
 nest_asyncio.apply()
 
 # Logging setup
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-# Get from Render Environment Variables
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")  # Chat ID or Channel username
+# Environment variables from Render
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")  # Example: '@yourchannel' or chat ID like -123456789
 
-# RSS Feeds - Global Cybersecurity News
+# Cybersecurity RSS Feeds
 FEEDS = [
     "https://www.darkreading.com/rss.xml",
     "https://feeds.feedburner.com/TheHackersNews",
@@ -29,31 +32,35 @@ FEEDS = [
     "https://www.schneier.com/blog/atom.xml"
 ]
 
-# Send latest feed entries
-async def send_news(context: CallbackContext):
+# Command Handler
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Hello! I will send you the latest cybersecurity news every 10 minutes.")
+
+# Scheduled job to send news
+async def send_news(application):
     for url in FEEDS:
         feed = feedparser.parse(url)
         if feed.entries:
             entry = feed.entries[0]
             message = f"🛡️ *{entry.title}*\n{entry.link}"
-            await context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
+            try:
+                await application.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
+            except Exception as e:
+                logging.error(f"Failed to send message: {e}")
 
-# /start command
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hello! I will keep you updated with the latest cybersecurity news!")
-
+# Main function
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # /start handler
+    # Register command handler
     app.add_handler(CommandHandler("start", start))
 
-    # Schedule news updates
+    # Scheduler to run news fetching every 10 minutes
     scheduler = BackgroundScheduler()
-    scheduler.add_job(send_news, trigger='interval', minutes=10, args=[app.bot])
+    scheduler.add_job(send_news, trigger='interval', minutes=10, args=[app])
     scheduler.start()
 
-    # Start bot
+    # Start the bot
     app.run_polling()
 
 if __name__ == "__main__":
