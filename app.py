@@ -1,7 +1,7 @@
 import os
 import asyncio
-from flask import Flask, request
-from telegram import Bot, Update
+from flask import Flask, request, jsonify
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler
 import feedparser
 import time
@@ -59,13 +59,13 @@ async def news(update: Update, context):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("news", news))
 
-# Webhook endpoint
+# Webhook endpoint (sync for gunicorn compatibility)
 @app.route("/webhook", methods=["POST"])
-async def webhook():
-    json_data = await request.get_json()
+def webhook():
+    json_data = request.get_json()
     update = Update.de_json(json_data, application.bot)
-    await application.process_update(update)
-    return "OK", 200
+    asyncio.run(application.process_update(update))  # Run async in sync context
+    return jsonify({"status": "ok"}), 200
 
 # Health check
 @app.route("/")
