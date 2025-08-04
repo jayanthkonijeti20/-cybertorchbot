@@ -1,24 +1,22 @@
 import logging
 import feedparser
 import nest_asyncio
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from apscheduler.schedulers.background import BackgroundScheduler
 import os
+
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from apscheduler.schedulers.background import BackgroundScheduler
 
 nest_asyncio.apply()
 
 # Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Environment variables from Render
-TOKEN = os.getenv("TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")  # Example: '@yourchannel' or chat ID like -123456789
+# Get tokens from environment
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")  # Channel username or numeric chat ID
 
-# Cybersecurity RSS Feeds
+# RSS feeds
 FEEDS = [
     "https://www.darkreading.com/rss.xml",
     "https://feeds.feedburner.com/TheHackersNews",
@@ -32,35 +30,30 @@ FEEDS = [
     "https://www.schneier.com/blog/atom.xml"
 ]
 
-# Command Handler
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hello! I will send you the latest cybersecurity news every 10 minutes.")
-
-# Scheduled job to send news
-async def send_news(application):
+# Sends latest news
+async def send_news(context: CallbackContext):
     for url in FEEDS:
         feed = feedparser.parse(url)
         if feed.entries:
             entry = feed.entries[0]
             message = f"🛡️ *{entry.title}*\n{entry.link}"
-            try:
-                await application.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
-            except Exception as e:
-                logging.error(f"Failed to send message: {e}")
+            await context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
 
-# Main function
+# /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Hello! I will keep you updated with the latest cybersecurity news!")
+
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Register command handler
+    # Add command handler
     app.add_handler(CommandHandler("start", start))
 
-    # Scheduler to run news fetching every 10 minutes
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(send_news, trigger='interval', minutes=10, args=[app])
-    scheduler.start()
+    # Setup scheduler with context
+    job_queue = app.job_queue
+    job_queue.run_repeating(send_news, interval=600, first=5)
 
-    # Start the bot
+    # Start bot
     app.run_polling()
 
 if __name__ == "__main__":
