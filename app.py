@@ -44,12 +44,26 @@ application.add_handler(CommandHandler("news", news))
 # 🔗 Telegram webhook endpoint
 @app.route("/webhook", methods=["POST"])
 def telegram_webhook():
-    json_data = request.get_json()
-    update = Update.de_json(json_data, application.bot)
-    asyncio.run(application.process_update(update))
-    return jsonify({"status": "ok"}), 200
+    try:
+        json_data = request.get_json()
+        print("📥 Incoming update:", json_data)
+
+        update = Update.de_json(json_data, application.bot)
+
+        async def handle_update():
+            await application.initialize()  # ✅ Initialize the bot
+            await application.process_update(update)
+
+        asyncio.run(handle_update())
+
+        return jsonify({"status": "ok"}), 200
+
+    except Exception as e:
+        print("❌ Webhook error:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 # ✅ Health check endpoint
 @app.route("/", methods=["GET"])
 def health_check():
     return "🟢 CyberTorch Bot is operational", 200
+
