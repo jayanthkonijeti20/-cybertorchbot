@@ -1,69 +1,58 @@
 import os
-import asyncio
-from flask import Flask, request, jsonify
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler
-from news_fetcher import fetch_news  # Modular news logic
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.request import HTTPXRequest
 
-# Initialize Flask app
-app = Flask(__name__)
+# 📰 Dummy news fetcher (replace with your actual logic)
+async def fetch_news():
+    return [
+        "🔐 New zero-day vulnerability discovered in Windows.",
+        "🛡️ Cisco releases patch for critical firewall bug.",
+        "📡 Hacker group targets financial institutions in Asia."
+    ]
 
-# Load bot token from environment
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-WEBHOOK_URL = "https://cybertorchbot.onrender.com/webhook"  # Update if needed
-
-if not TOKEN:
-    raise ValueError("❌ TELEGRAM_TOKEN environment variable not set!")
-
-# Initialize Telegram bot application
-application = ApplicationBuilder().token(TOKEN).build()
-
-# 📌 /start command
-async def start(update: Update, context):
-    await update.message.reply_text(
-        "🛡️ <b>CyberTorch News Bot</b>\n\n"
-        "Commands:\n"
-        "/start - Show help\n"
-        "/news - Get latest updates",
-        parse_mode="HTML"
-    )
-
-# 📰 /news command
-async def news(update: Update, context):
-    news_items = await fetch_news()
-    await update.message.reply_text(
-        "📡 <b>Latest Cybersecurity News:</b>\n\n" + "\n\n".join(news_items),
-        parse_mode="HTML",
-        disable_web_page_preview=True
-    )
-
-# Register command handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("news", news))
-
-# 🔗 Telegram webhook endpoint
-@app.route("/webhook", methods=["POST"])
-def telegram_webhook():
+# 🚀 /start command handler
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        json_data = request.get_json()
-        print("📥 Incoming update:", json_data)
-
-        update = Update.de_json(json_data, application.bot)
-
-        async def handle_update():
-            await application.initialize()  # ✅ Initialize the bot
-            await application.process_update(update)
-
-        asyncio.run(handle_update())
-
-        return jsonify({"status": "ok"}), 200
-
+        print("✅ /start command received")
+        chat_id = update.effective_chat.id
+        print(f"💬 Chat ID: {chat_id}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🛡️ CyberTorchBot is now active!",
+            parse_mode="HTML"
+        )
     except Exception as e:
-        print("❌ Webhook error:", str(e))
-        return jsonify({"error": str(e)}), 500
+        print("❌ Error in /start handler:", str(e))
 
-# ✅ Health check endpoint
-@app.route("/", methods=["GET"])
-def health_check():
-    return "🟢 CyberTorch Bot is operational", 200
+# 📰 /news command handler
+async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        print("✅ /news command received")
+        chat_id = update.effective_chat.id
+        news_items = await fetch_news()
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="📡 Latest Cybersecurity News:\n\n" + "\n\n".join(news_items),
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        print("❌ Error in /news handler:", str(e))
 
+# 🧠 Main function to run the bot
+def main():
+    request = HTTPXRequest(pool_limits=10, read_timeout=10.0)  # Prevent pool timeout
+    application = ApplicationBuilder().token(os.environ["BOT_TOKEN"]).request(request).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("news", news))
+
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", 8443)),
+        webhook_url=os.environ["WEBHOOK_URL"]
+    )
+
+if __name__ == "__main__":
+    main()
