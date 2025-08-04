@@ -1,28 +1,24 @@
 import logging
 import feedparser
 import nest_asyncio
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-)
 import os
-import asyncio
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from apscheduler.schedulers.background import BackgroundScheduler
 
 nest_asyncio.apply()
 
-# Logging setup
+# Logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Load secrets from environment variables
+# Environment variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")  # Chat ID or Channel username
+CHAT_ID = os.getenv("CHAT_ID")  # Telegram chat/channel ID
 
-# RSS Feed URLs
+# RSS feeds
 FEEDS = [
     "https://www.darkreading.com/rss.xml",
     "https://feeds.feedburner.com/TheHackersNews",
@@ -36,8 +32,8 @@ FEEDS = [
     "https://www.schneier.com/blog/atom.xml"
 ]
 
-# News sending function
-async def send_news(context: ContextTypes.DEFAULT_TYPE):
+# Send news to chat
+async def send_news(context: CallbackContext):
     for url in FEEDS:
         feed = feedparser.parse(url)
         if feed.entries:
@@ -45,21 +41,20 @@ async def send_news(context: ContextTypes.DEFAULT_TYPE):
             message = f"🛡️ *{entry.title}*\n{entry.link}"
             await context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
 
-# /start handler
+# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Hello! I will keep you updated with the latest cybersecurity news!")
 
-# Main entry
-async def main():
+# Main function
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
 
-    # Schedule job every 10 minutes
-    job_queue = app.job_queue
-    job_queue.run_repeating(send_news, interval=600, first=10)
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(send_news, trigger='interval', minutes=10, args=[app.bot])
+    scheduler.start()
 
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
