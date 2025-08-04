@@ -9,51 +9,35 @@ app = Flask(__name__)
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = Bot(token=TOKEN)
 
-# 10+ Cybersecurity News Sources
+# News sources
 SOURCES = [
     ("The Hacker News", "https://feeds.feedburner.com/TheHackersNews"),
-    ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
-    ("BleepingComputer", "https://www.bleepingcomputer.com/feed/"),
-    ("Threatpost", "https://threatpost.com/feed/"),
-    ("Dark Reading", "https://www.darkreading.com/rss.xml"),
-    ("CSO Online", "https://www.csoonline.com/feed"),
-    ("SecurityWeek", "https://feeds.feedburner.com/securityweek"),
-    ("GBHackers", "https://gbhackers.com/feed/"),
-    ("Cybersecurity Insiders", "https://www.cybersecurity-insiders.com/feed/"),
-    ("The Record", "https://therecord.media/feed/")
+    ("Krebs on Security", "https://krebsonsecurity.com/feed/")
 ]
 
-def fetch_news(max_items=3):
-    """Fetch headlines without user tracking"""
+def get_news():
     news = []
     for name, url in SOURCES:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:max_items]:
-                news.append(f"🔸 *{name}*: [{entry.title}]({entry.link})")
-            time.sleep(1)  # Rate limiting
+            for entry in feed.entries[:3]:  # Get 3 latest
+                news.append(f"🔹 {name}: {entry.title}\n{entry.link}")
+            time.sleep(1)
         except Exception as e:
-            print(f"⚠️ Error with {name}: {e}")
-    return news[:15]  # Limit to 15 items
+            print(f"Error fetching {name}: {e}")
+    return news
 
-# Command: /latest
+# Command handlers
+def start(update: Update, context):
+    update.message.reply_text("Welcome! Use /latest for news.")
+
 def latest(update: Update, context):
-    news = fetch_news()
-    if news:
-        update.message.reply_text(
-            "📡 *Latest Cybersecurity News:*\n\n" + "\n\n".join(news),
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
-    else:
-        update.message.reply_text("❌ No updates found. Try later.")
+    news = get_news()
+    update.message.reply_text("\n\n".join(news) if news else "No updates found.")
 
 # Webhook setup
 dispatcher = Dispatcher(bot, None)
-dispatcher.add_handler(CommandHandler("start", lambda u, _: u.message.reply_text(
-    "🛡️ *Cyber News Bot*\nUse /latest to get updates.",
-    parse_mode="Markdown"
-)))
+dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(CommandHandler("latest", latest))
 
 @app.route("/webhook", methods=["POST"])
@@ -61,6 +45,10 @@ def webhook():
     update = Update.de_json(request.get_json(), bot)
     dispatcher.process_update(update)
     return "OK"
+
+@app.route("/")
+def health_check():
+    return "Bot is running", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
