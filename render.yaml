@@ -1,11 +1,11 @@
 services:
   - type: web
     name: cybertorch-bot
-    runtime: python
-    buildCommand: ""
+    env: python
+    buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        value: YOUR_BOT_TOKEN_HERE
+        value: your_actual_bot_token_here
       - key: CHAT_ID
-        value: YOUR_CHAT_ID_HERE
+        value: your_actual_chat_id_or_channel_name_here
