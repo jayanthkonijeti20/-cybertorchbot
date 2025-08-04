@@ -22,38 +22,44 @@ NEWS_SOURCES = [
 ]
 
 # Initialize Telegram Bot
-bot = Bot(token=TOKEN)
 application = ApplicationBuilder().token(TOKEN).build()
 
 async def fetch_news():
-    """Fetch cybersecurity news"""
+    """Fetch cybersecurity news with error handling"""
     news = []
     for name, url in NEWS_SOURCES:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:3]:
-                news.append(f"🔹 {name}: {entry.title}\n{entry.link}")
-            time.sleep(1)
+            for entry in feed.entries[:3]:  # Get 3 latest per source
+                news.append(f"🔹 {name}: <a href='{entry.link}'>{entry.title}</a>")
+            time.sleep(1)  # Rate limiting
         except Exception as e:
-            print(f"Error fetching {name}: {str(e)}")
-    return news or ["No updates available"]
+            print(f"⚠️ Error fetching {name}: {str(e)}")
+    return news or ["No updates currently available"]
 
+# Command handlers
 async def start(update: Update, context):
     await update.message.reply_text(
-        "🛡️ CyberTorch News Bot\n\n"
+        "🛡️ <b>CyberTorch News Bot</b>\n\n"
         "Commands:\n"
         "/start - Show help\n"
-        "/news - Get updates"
+        "/news - Get latest updates",
+        parse_mode="HTML"
     )
 
 async def news(update: Update, context):
     news_items = await fetch_news()
-    await update.message.reply_text("\n\n".join(news_items))
+    await update.message.reply_text(
+        "📡 <b>Latest Cybersecurity News:</b>\n\n" + "\n\n".join(news_items),
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
 
 # Register handlers
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("news", news))
 
+# Webhook endpoint
 @app.route("/webhook", methods=["POST"])
 async def webhook():
     json_data = await request.get_json()
@@ -61,16 +67,17 @@ async def webhook():
     await application.process_update(update)
     return "OK", 200
 
+# Health check
 @app.route("/")
 def health_check():
-    return "Bot is running", 200
+    return "🟢 CyberTorch Bot is operational", 200
 
 if __name__ == "__main__":
-    # Set webhook in production
+    # Configure webhook in production
     if "onrender.com" in WEBHOOK_URL:
         async def configure_webhook():
             await application.bot.set_webhook(WEBHOOK_URL)
-            print(f"Webhook set to: {WEBHOOK_URL}")
+            print(f"✅ Webhook configured: {WEBHOOK_URL}")
         asyncio.run(configure_webhook())
     
     app.run(host="0.0.0.0", port=PORT)
