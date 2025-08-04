@@ -1,10 +1,10 @@
 import os
 import asyncio
+import time
+import feedparser
 from flask import Flask, request, jsonify
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler
-import feedparser
-import time
 
 app = Flask(__name__)
 
@@ -30,9 +30,9 @@ async def fetch_news():
     for name, url in NEWS_SOURCES:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:3]:  # Get 3 latest per source
+            for entry in feed.entries[:3]:
                 news.append(f"🔹 {name}: <a href='{entry.link}'>{entry.title}</a>")
-            time.sleep(1)  # Rate limiting
+            time.sleep(1)
         except Exception as e:
             print(f"⚠️ Error fetching {name}: {str(e)}")
     return news or ["No updates currently available"]
@@ -59,12 +59,12 @@ async def news(update: Update, context):
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("news", news))
 
-# Webhook endpoint (sync for gunicorn compatibility)
+# Webhook endpoint
 @app.route("/webhook", methods=["POST"])
 def webhook():
     json_data = request.get_json()
     update = Update.de_json(json_data, application.bot)
-    asyncio.run(application.process_update(update))  # Run async in sync context
+    asyncio.run(application.process_update(update))
     return jsonify({"status": "ok"}), 200
 
 # Health check
@@ -73,11 +73,8 @@ def health_check():
     return "🟢 CyberTorch Bot is operational", 200
 
 if __name__ == "__main__":
-    # Configure webhook in production
-    if "onrender.com" in WEBHOOK_URL:
-        async def configure_webhook():
-            await application.bot.set_webhook(WEBHOOK_URL)
-            print(f"✅ Webhook configured: {WEBHOOK_URL}")
-        asyncio.run(configure_webhook())
-    
+    async def configure_webhook():
+        await application.bot.set_webhook(WEBHOOK_URL)
+        print(f"✅ Webhook configured: {WEBHOOK_URL}")
+    asyncio.run(configure_webhook())
     app.run(host="0.0.0.0", port=PORT)
