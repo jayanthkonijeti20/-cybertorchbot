@@ -1,24 +1,21 @@
 import logging
 import feedparser
 import nest_asyncio
-import os
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
+import os
 
 nest_asyncio.apply()
 
 # Logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Environment variables
+# Bot Token and Chat ID from environment
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")  # Telegram chat/channel ID
+CHAT_ID = os.getenv("CHAT_ID")  # Example: '@yourchannel' or your chat ID
 
-# RSS feeds
+# Cybersecurity RSS Feeds
 FEEDS = [
     "https://www.darkreading.com/rss.xml",
     "https://feeds.feedburner.com/TheHackersNews",
@@ -32,8 +29,8 @@ FEEDS = [
     "https://www.schneier.com/blog/atom.xml"
 ]
 
-# Send news to chat
-async def send_news(context: CallbackContext):
+# Send latest news
+async def send_news(context):
     for url in FEEDS:
         feed = feedparser.parse(url)
         if feed.entries:
@@ -41,17 +38,16 @@ async def send_news(context: CallbackContext):
             message = f"🛡️ *{entry.title}*\n{entry.link}"
             await context.bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
 
-# Start command
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Hello! I will keep you updated with the latest cybersecurity news!")
 
-# Main function
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(send_news, trigger='interval', minutes=10, args=[app.bot])
+    scheduler.add_job(send_news, 'interval', minutes=10, args=[app.bot])
     scheduler.start()
 
     app.run_polling()
