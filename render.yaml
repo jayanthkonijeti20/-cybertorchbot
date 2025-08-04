@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: cyber-news-bot
+    runtime: python
+    branch: main  # Your GitHub branch
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: TELEGRAM_TOKEN
+        value: YOUR_BOT_TOKEN  # Set this in Render's dashboard for security
+    plan: free
