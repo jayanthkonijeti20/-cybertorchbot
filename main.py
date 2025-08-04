@@ -1,69 +1,61 @@
-import os
 import logging
 import feedparser
 import nest_asyncio
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-import asyncio
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from apscheduler.schedulers.background import BackgroundScheduler
+import os
 
 nest_asyncio.apply()
 
 # Logging setup
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# List of RSS feeds
-RSS_FEEDS = [
-    "https://www.darkreading.com/rss.xml",
-    "https://www.securityweek.com/feed/",
-    "https://threatpost.com/feed/",
-    "https://feeds.feedburner.com/TheHackersNews",
-    "https://www.bleepingcomputer.com/feed/",
-    "https://www.schneier.com/feed/atom/"
+# Your Bot Token (use Render Environment Variable instead of hardcoding here)
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")  # Example: '@mychannel' or chat ID
+
+# RSS Feeds
+FEEDS = [
+    "https://www.darkreading.com/rss.xml",                             # Global security news
+    "https://feeds.feedburner.com/TheHackersNews",                    # Hacker News
+    "https://www.bleepingcomputer.com/feed/",                         # Malware, ransomware, data breaches
+    "https://www.securityweek.com/feed/",                             # Global enterprise security
+    "https://www.zdnet.com/topic/security/rss.xml",                   # Tech and security insights
+    "https://krebsonsecurity.com/feed/",                              # In-depth security investigations
+    "https://www.cisa.gov/news.xml",                                  # US Gov alerts (CISA)
+    "https://nakedsecurity.sophos.com/feed/",                         # Sophos blog
+    "https://threatpost.com/feed/",                                   # Threat intelligence
+    "https://www.schneier.com/blog/atom.xml"                          # Bruce Schneier's security blog
 ]
 
-CHAT_ID = os.getenv("CHAT_ID")  # Set this in Render if needed
-TOKEN = os.getenv("BOT_TOKEN")  # Set this in Render
 
-sent_articles = set()
+# Send latest feed entries
+async def send_news(context: CallbackContext):
+    for url in FEEDS:
+        feed = feedparser.parse(url)
+        if feed.entries:
+            entry = feed.entries[0]
+            message = f"🛡️ *{entry.title}*\n{entry.link}"
+            await context.bot.send_message(chat_id=CHANNEL_ID, text=message, parse_mode="Markdown")
 
-
-async def send_news(context: ContextTypes.DEFAULT_TYPE):
-    for feed_url in RSS_FEEDS:
-        feed = feedparser.parse(feed_url)
-        for entry in feed.entries[:3]:
-            if entry.link not in sent_articles:
-                message = f"*{entry.title}*\n{entry.link}"
-                await context.bot.send_message(
-                    chat_id=CHAT_ID,
-                    text=message,
-                    parse_mode='Markdown'
-                )
-                logging.info(f"Sent: {entry.link}")
-                sent_articles.add(entry.link)
-
-
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ CyberTorch Bot is alive and running!")
-
+# Bot command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Hello! I will keep you updated with the latest cybersecurity news!")
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Add command handlers
-    app.add_handler(CommandHandler("status", status))
+    # Command handler
+    app.add_handler(CommandHandler("start", start))
 
-    # Setup scheduler
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(send_news, "interval", minutes=30, args=[app.bot])
+    # Scheduler for periodic updates
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(send_news, trigger='interval', minutes=10, args=[app.bot])
     scheduler.start()
 
-    logging.info("Bot started.")
+    # Start bot
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
