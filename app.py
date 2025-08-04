@@ -1,12 +1,11 @@
 import os
 import asyncio
-import time
 from flask import Flask, request
 from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler
+from telegram.ext import ApplicationBuilder, CommandHandler
 import feedparser
+import time
 
-# Initialize Flask app
 app = Flask(__name__)
 
 # Configuration
@@ -24,71 +23,54 @@ NEWS_SOURCES = [
 
 # Initialize Telegram Bot
 bot = Bot(token=TOKEN)
+application = ApplicationBuilder().token(TOKEN).build()
 
-async def fetch_news(max_items=3):
+async def fetch_news():
     """Fetch cybersecurity news"""
     news = []
     for name, url in NEWS_SOURCES:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:max_items]:
-                news.append(f"🔹 {name}: <a href='{entry.link}'>{entry.title}</a>")
+            for entry in feed.entries[:3]:
+                news.append(f"🔹 {name}: {entry.title}\n{entry.link}")
             time.sleep(1)
         except Exception as e:
-            print(f"⚠️ Error fetching {name}: {str(e)}")
+            print(f"Error fetching {name}: {str(e)}")
     return news or ["No updates available"]
 
-# Telegram commands
 async def start(update: Update, context):
     await update.message.reply_text(
-        "🛡️ <b>CyberTorch Bot</b>\n\n"
+        "🛡️ CyberTorch News Bot\n\n"
         "Commands:\n"
         "/start - Show help\n"
-        "/news - Get updates\n"
-        "/sources - List providers",
-        parse_mode="HTML"
+        "/news - Get updates"
     )
 
 async def news(update: Update, context):
     news_items = await fetch_news()
-    await update.message.reply_text(
-        "📡 <b>Latest News:</b>\n\n" + "\n\n".join(news_items),
-        parse_mode="HTML",
-        disable_web_page_preview=True
-    )
+    await update.message.reply_text("\n\n".join(news_items))
 
-async def sources(update: Update, context):
-    sources_list = "\n".join([f"• {name}" for name, _ in NEWS_SOURCES])
-    await update.message.reply_text(
-        f"📚 <b>News Sources:</b>\n\n{sources_list}",
-        parse_mode="HTML"
-    )
+# Register handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("news", news))
 
-# Flask routes
 @app.route("/webhook", methods=["POST"])
-def telegram_webhook():
-    update = Update.de_json(request.get_json(), bot)
-    dispatcher = Dispatcher(bot, None)
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("news", news))
-    dispatcher.add_handler(CommandHandler("sources", sources))
-    dispatcher.process_update(update)
+async def webhook():
+    json_data = await request.get_json()
+    update = Update.de_json(json_data, application.bot)
+    await application.process_update(update)
     return "OK", 200
 
 @app.route("/")
 def health_check():
-    return "🟢 CyberTorch Bot is running", 200
-
-@app.route("/ping")
-def ping():
-    return "pong", 200
+    return "Bot is running", 200
 
 if __name__ == "__main__":
-    # Configure webhook in production
+    # Set webhook in production
     if "onrender.com" in WEBHOOK_URL:
-        async def setup():
-            await bot.set_webhook(WEBHOOK_URL)
-            print(f"✅ Webhook set: {WEBHOOK_URL}")
-        asyncio.run(setup())
+        async def configure_webhook():
+            await application.bot.set_webhook(WEBHOOK_URL)
+            print(f"Webhook set to: {WEBHOOK_URL}")
+        asyncio.run(configure_webhook())
     
     app.run(host="0.0.0.0", port=PORT)
