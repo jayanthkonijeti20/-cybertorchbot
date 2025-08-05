@@ -1,10 +1,12 @@
 import os
-import asyncio
 import feedparser
-import httpx
+from flask import Flask, request
 from telegram import Update, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram.request import HTTPXRequest
+from telegram.ext import Application, CommandHandler, ContextTypes, Dispatcher
+
+# 🔐 Load environment variables
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://cybertorchbot.onrender.com/webhook
 
 # 🌐 Cybersecurity RSS feeds
 RSS_FEEDS = [
@@ -15,8 +17,8 @@ RSS_FEEDS = [
     "https://www.darkreading.com/rss.xml"
 ]
 
-# 📰 Fetch real cybersecurity news
-async def fetch_news():
+# 📰 Fetch cybersecurity news
+def get_cybersecurity_news():
     headlines = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
@@ -24,60 +26,37 @@ async def fetch_news():
             title = entry.title
             link = entry.link
             headlines.append(f"📰 {title}\n🔗 {link}")
-    return headlines
+    return "\n\n".join(headlines)
 
-# 🚀 /start command handler
+# 🚀 /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        print("✅ /start command received")
-        chat_id = update.effective_chat.id
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="🛡️ CyberTorchBot is now active!",
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        print("❌ Error in /start handler:", str(e))
+    await update.message.reply_text("🛡️ CyberTorchBot is now active!")
 
-# 📰 /news command handler
+# 📰 /news command
 async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        print("✅ /news command received")
-        chat_id = update.effective_chat.id
-        news_items = await fetch_news()
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="📡 Latest Cybersecurity News:\n\n" + "\n\n".join(news_items),
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
-    except Exception as e:
-        print("❌ Error in /news handler:", str(e))
+    news_text = get_cybersecurity_news()
+    await update.message.reply_text(f"📡 Latest Cybersecurity News:\n\n{news_text}", disable_web_page_preview=True)
 
-# 🔗 Set webhook
-async def configure_webhook():
-    bot = Bot(token=os.environ["TELEGRAM_TOKEN"])
-    success = await bot.set_webhook(os.environ["WEBHOOK_URL"])
-    print(f"✅ Webhook set:", success)
+# 🧠 Flask app setup
+app = Flask(__name__)
+bot = Bot(token=TOKEN)
+application = Application.builder().token(TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("news", news))
 
-# 🧠 Main function to run the bot
-def main():
-    request = HTTPXRequest()
-    application = ApplicationBuilder().token(os.environ["TELEGRAM_TOKEN"]).request(request).build()
+# 🔗 Telegram webhook route
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    application.update_queue.put(update)
+    return "OK", 200
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("news", news))
+# 🔗 Set webhook on startup
+@app.before_first_request
+def set_webhook():
+    bot.set_webhook(WEBHOOK_URL)
+    print(f"✅ Webhook set to: {WEBHOOK_URL}")
 
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8443)),
-        webhook_url=os.environ["WEBHOOK_URL"]
-    )
-
-# 🚀 Entry point
-async def run_bot():
-    await configure_webhook()
-    main()
-
+# 🚀 Gunicorn entry point
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
