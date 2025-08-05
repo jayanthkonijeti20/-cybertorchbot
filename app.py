@@ -2,7 +2,8 @@ import os
 import feedparser
 from flask import Flask, request
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes, Dispatcher
+from telegram.ext import Application, CommandHandler, ContextTypes
+
 
 # 🔐 Load environment variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -60,3 +61,4 @@ def set_webhook():
 # 🚀 Gunicorn entry point
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
