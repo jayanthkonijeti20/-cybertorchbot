@@ -50,14 +50,12 @@ def main():
     )
     request = HTTPXRequest(client=client)
 
-    # ✅ Build the Telegram bot application
-    application = ApplicationBuilder().token(os.environ["BOT_TOKEN"]).request(request).build()
+    # ✅ Use TELEGRAM_BOT environment variable
+    application = ApplicationBuilder().token(os.environ["TELEGRAM_BOT"]).request(request).build()
 
-    # ✅ Register command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("news", news))
 
-    # ✅ Run the bot using webhook (for Render)
     application.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", 8443)),
