@@ -1,23 +1,36 @@
 import os
+import asyncio
+import feedparser
 import httpx
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from telegram.request import HTTPXRequest
 
-# 📰 Dummy news fetcher (replace with your actual logic)
+# 🌐 Cybersecurity RSS feeds
+RSS_FEEDS = [
+    "https://www.bleepingcomputer.com/feed/",
+    "https://threatpost.com/feed/",
+    "https://krebsonsecurity.com/feed/",
+    "https://feeds.feedburner.com/TheHackersNews",
+    "https://www.darkreading.com/rss.xml"
+]
+
+# 📰 Fetch real cybersecurity news
 async def fetch_news():
-    return [
-        "🔐 New zero-day vulnerability discovered in Windows.",
-        "🛡️ Cisco releases patch for critical firewall bug.",
-        "📡 Hacker group targets financial institutions in Asia."
-    ]
+    headlines = []
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:2]:  # Top 2 from each source
+            title = entry.title
+            link = entry.link
+            headlines.append(f"📰 {title}\n🔗 {link}")
+    return headlines
 
 # 🚀 /start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         print("✅ /start command received")
         chat_id = update.effective_chat.id
-        print(f"💬 Chat ID: {chat_id}")
         await context.bot.send_message(
             chat_id=chat_id,
             text="🛡️ CyberTorchBot is now active!",
@@ -41,14 +54,15 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print("❌ Error in /news handler:", str(e))
 
+# 🔗 Set webhook
+async def configure_webhook():
+    bot = Bot(token=os.environ["TELEGRAM_TOKEN"])
+    success = await bot.set_webhook(os.environ["WEBHOOK_URL"])
+    print(f"✅ Webhook set:", success)
+
 # 🧠 Main function to run the bot
-from telegram.ext import ApplicationBuilder
-from telegram.request import HTTPXRequest
-
 def main():
-    # ✅ Configure HTTPXRequest with supported arguments
     request = HTTPXRequest()
-
     application = ApplicationBuilder().token(os.environ["TELEGRAM_TOKEN"]).request(request).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -60,22 +74,10 @@ def main():
         webhook_url=os.environ["WEBHOOK_URL"]
     )
 
-
 # 🚀 Entry point
-# 🚀 Entry point
-import asyncio
-
 async def run_bot():
     await configure_webhook()
     main()
 
 if __name__ == "__main__":
     asyncio.run(run_bot())
-
-
-
-
-
-
-
-
