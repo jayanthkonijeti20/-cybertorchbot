@@ -62,17 +62,17 @@ def main():
 
 
 # 🚀 Entry point
+# 🚀 Entry point
+import asyncio
+
+async def run_bot():
+    await configure_webhook()
+    main()
+
 if __name__ == "__main__":
-    import asyncio
-    from telegram import Bot
+    asyncio.run(run_bot())
 
-    async def set_webhook():
-        bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
-        success = await bot.set_webhook("https://cybertorchbot.onrender.com/webhook")
-        print("✅ Webhook set:", success)
 
-    asyncio.run(set_webhook())  # Run this once
-    main()  # Then start the bot
 
 
 
