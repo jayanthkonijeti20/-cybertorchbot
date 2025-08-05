@@ -1,78 +1,72 @@
 import os
-import feedparser
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from flask import Flask, request
+import requests
+from bs4 import BeautifulSoup
 
-# 🔧 Load environment variables
-TOKEN       = os.getenv("TELEGRAM_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-PORT        = int(os.environ.get("PORT", 5000))
+app = Flask(__name__)
 
-# 📰 RSS feeds
-RSS_FEEDS = [
-    "https://www.bleepingcomputer.com/feed/",
-    "https://threatpost.com/feed/",
-    "https://krebsonsecurity.com/feed/",
-    "https://feeds.feedburner.com/TheHackersNews",
-    "https://www.darkreading.com/rss.xml",
-]
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-# 🧠 News fetcher
-def get_cybersecurity_news() -> str:
+@app.route('/health', methods=['GET'])
+def health_check():
+    return '✅ CyberTorchBot is alive!', 200
+
+@app.route('/webhook', methods=['POST'])
+def telegram_webhook():
+    data = request.get_json()
+    if "message" in data:
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"].get("text", "")
+
+        if text.lower() == "/start":
+            send_message(chat_id, "👋 Welcome to *CyberTorchBot*! Type /news to get the latest cybersecurity headlines.", markdown=True)
+
+        elif text.lower() == "/news":
+            news = get_latest_news()
+            send_message(chat_id, news, markdown=True)
+
+        else:
+            send_message(chat_id, "🤖 Unknown command. Try /start or /news.")
+
+    return "OK", 200
+
+def send_message(chat_id, text, markdown=False):
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown" if markdown else None
+    }
+    requests.post(TELEGRAM_API_URL, json=payload)
+
+def get_latest_news():
     headlines = []
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:2]:
-            headlines.append(f"📰 {entry.title}\n🔗 {entry.link}")
-    return "\n\n".join(headlines)
 
-# 📌 Command: /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🛡️ CyberTorchBot is now active!")
+    # Scrape The Hacker News
+    try:
+        thn = requests.get("https://thehackernews.com").text
+        soup = BeautifulSoup(thn, "html.parser")
+        articles = soup.select(".body-post h2 a")[:3]
+        for a in articles:
+            title = a.text.strip()
+            url = a["href"]
+            headlines.append(f"• 🔐 [{title}]({url})")
+    except Exception as e:
+        headlines.append("⚠️ Failed to fetch from The Hacker News.")
 
-# 📌 Command: /news
-async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = get_cybersecurity_news()
-    await update.message.reply_text(
-        f"📡 Latest Cybersecurity News:\n\n{text}",
-        disable_web_page_preview=True
-    )
+    # Scrape BleepingComputer
+    try:
+        bc = requests.get("https://www.bleepingcomputer.com").text
+        soup = BeautifulSoup(bc, "html.parser")
+        articles = soup.select(".bc_latest_news .bc_latest_news_title a")[:3]
+        for a in articles:
+            title = a.text.strip()
+            url = "https://www.bleepingcomputer.com" + a["href"]
+            headlines.append(f"• 🛡️ [{title}]({url})")
+    except Exception as e:
+        headlines.append("⚠️ Failed to fetch from BleepingComputer.")
 
-# 📌 Command: /help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🛠️ *CyberTorchBot Help*\n\n"
-        "Use the following commands:\n"
-        "• /start – Activate the bot\n"
-        "• /news – Get the latest cybersecurity headlines\n"
-        "• /about – Learn more about this bot\n"
-        "• /help – Show this help message",
-        parse_mode="Markdown"
-    )
+    return "*📰 Latest Cybersecurity News:*\n" + "\n".join(headlines)
 
-# 📌 Command: /about
-async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔍 *About CyberTorchBot*\n\n"
-        "I’m a Telegram bot built by Jayanth to deliver real-time cybersecurity news "
-        "from trusted sources like ThreatPost, KrebsOnSecurity, and The Hacker News.\n\n"
-        "Stay informed. Stay secure. 🛡️",
-        parse_mode="Markdown"
-    )
-
-# 🚀 Build application
-application = Application.builder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("news", news))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("about", about_command))
-
-# ✅ Run webhook server
-if __name__ == "__main__":
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=WEBHOOK_URL
-    )
-
-
+if __name__ == '__main__':
+    app.run(debug=True)
