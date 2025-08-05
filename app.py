@@ -47,8 +47,7 @@ from telegram.request import HTTPXRequest
 
 def main():
     # ✅ Configure HTTPXRequest with supported arguments
-    request = HTTPXRequest(http_version="HTTP/1.1")
-
+    request = HTTPXRequest()
 
     application = ApplicationBuilder().token(os.environ["TELEGRAM_BOT"]).request(request).build()
 
@@ -65,5 +64,6 @@ def main():
 # 🚀 Entry point
 if __name__ == "__main__":
     main()
+
 
 
