@@ -42,15 +42,16 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("❌ Error in /news handler:", str(e))
 
 # 🧠 Main function to run the bot
-def main():
-    # ✅ Create custom HTTPX client to avoid pool timeout
-    client = httpx.AsyncClient(
-        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-        timeout=httpx.Timeout(10.0)
-    )
-    request = HTTPXRequest(client=client)
+from telegram.ext import ApplicationBuilder
+from telegram.request import HTTPXRequest
 
-    # ✅ Use TELEGRAM_BOT environment variable
+def main():
+    # ✅ Configure HTTPXRequest with supported arguments
+    request = HTTPXRequest(
+        http_version="HTTP/1.1",
+        connect_timeout=10.0
+    )
+
     application = ApplicationBuilder().token(os.environ["TELEGRAM_BOT"]).request(request).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -62,6 +63,8 @@ def main():
         webhook_url=os.environ["WEBHOOK_URL"]
     )
 
+
 # 🚀 Entry point
 if __name__ == "__main__":
     main()
+
