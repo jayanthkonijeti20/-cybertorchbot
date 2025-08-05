@@ -2,8 +2,12 @@ import os
 import feedparser
 from flask import Flask, request
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
-
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    Dispatcher,
+)
 
 # 🔐 Load environment variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -41,6 +45,8 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 🧠 Flask app setup
 app = Flask(__name__)
 bot = Bot(token=TOKEN)
+
+# 🧠 Telegram application and dispatcher
 application = Application.builder().token(TOKEN).build()
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("news", news))
@@ -61,4 +67,3 @@ def set_webhook():
 # 🚀 Gunicorn entry point
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
