@@ -49,7 +49,7 @@ def main():
     # ✅ Configure HTTPXRequest with supported arguments
     request = HTTPXRequest()
 
-    application = ApplicationBuilder().token(os.environ["TELEGRAM_BOT"]).request(request).build()
+    application = ApplicationBuilder().token(os.environ["TELEGRAM_TOKEN"]).request(request).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("news", news))
@@ -64,6 +64,7 @@ def main():
 # 🚀 Entry point
 if __name__ == "__main__":
     main()
+
 
 
 
